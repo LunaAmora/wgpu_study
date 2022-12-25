@@ -80,10 +80,10 @@ impl State {
             push_constant_ranges: &[],
         });
 
-        let shader = device.create_shader_module(include_wgsl!("shader.wgsl"));
+        let shader = device.create_shader_module(include_wgsl!("shaders/shader.wgsl"));
         let render_pipeline = new_pipeline(&device, &render_pipeline_layout, shader, &config);
 
-        let shader = device.create_shader_module(include_wgsl!("challenge.wgsl"));
+        let shader = device.create_shader_module(include_wgsl!("shaders/challenge.wgsl"));
         let challenge_render_pipeline =
             new_pipeline(&device, &render_pipeline_layout, shader, &config);
 
