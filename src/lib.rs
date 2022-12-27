@@ -2,13 +2,44 @@ use std::iter;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-use wgpu::*;
+use wgpu::{
+    util::{BufferInitDescriptor, DeviceExt},
+    *,
+};
 use winit::{
     dpi::PhysicalSize,
     event::*,
     event_loop::{ControlFlow, EventLoop},
     window::{Window, WindowBuilder},
 };
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+impl Vertex {
+    const ATTRIBS: [VertexAttribute; 2] = vertex_attr_array![0 => Float32x3, 1 => Float32x3];
+
+    fn desc<'a>() -> VertexBufferLayout<'a> {
+        VertexBufferLayout {
+            array_stride: std::mem::size_of::<Self>() as BufferAddress,
+            step_mode: VertexStepMode::Vertex,
+            attributes: &Self::ATTRIBS,
+        }
+    }
+}
+
+const VERTICES: &[Vertex] = &[
+    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
+    Vertex {
+        position: [-0.5, -0.5, 0.0],
+        color: [0.0, 1.0, 0.0],
+    },
+    Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
+];
 
 struct State {
     #[allow(dead_code)]
@@ -23,6 +54,8 @@ struct State {
     clear_color: Color,
     render_pipeline: RenderPipeline,
     challenge_render_pipeline: RenderPipeline,
+    vertex_buffer: Buffer,
+    num_vertices: u32,
     use_color: bool,
 }
 
@@ -87,6 +120,14 @@ impl State {
         let challenge_render_pipeline =
             new_pipeline(&device, &render_pipeline_layout, shader, &config);
 
+        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: BufferUsages::VERTEX,
+        });
+
+        let num_vertices = VERTICES.len() as u32;
+
         let use_color = true;
 
         Self {
@@ -100,6 +141,8 @@ impl State {
             size,
             render_pipeline,
             challenge_render_pipeline,
+            vertex_buffer,
+            num_vertices,
             use_color,
         }
     }
@@ -171,7 +214,8 @@ impl State {
                 &self.challenge_render_pipeline
             });
 
-            render_pass.draw(0..3, 0..1);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+            render_pass.draw(0..self.num_vertices, 0..1);
         }
 
         self.queue.submit(iter::once(encoder.finish()));
@@ -185,13 +229,13 @@ fn new_pipeline(
     device: &Device, render_pipeline_layout: &PipelineLayout, shader: ShaderModule,
     config: &SurfaceConfiguration,
 ) -> RenderPipeline {
-    let render_pipeline = device.create_render_pipeline(&RenderPipelineDescriptor {
+    device.create_render_pipeline(&RenderPipelineDescriptor {
         label: Some("Render Pipeline"),
         layout: Some(render_pipeline_layout),
         vertex: VertexState {
             module: &shader,
             entry_point: "vs_main",
-            buffers: &[],
+            buffers: &[Vertex::desc()],
         },
         fragment: Some(FragmentState {
             module: &shader,
@@ -223,8 +267,7 @@ fn new_pipeline(
         // If the pipeline will be used with a multiview render pass, this
         // indicates how many array layers the attachments will have.
         multiview: None,
-    });
-    render_pipeline
+    })
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
