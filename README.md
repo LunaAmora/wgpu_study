@@ -7,7 +7,7 @@ __Beginner__
 - [x] Dependencies and the window
 - [x] The Surface
 - [x] The Pipeline
-- [ ] Buffers and Indices
+- [x] Buffers and Indices
 - [ ] Textures and bind groups
 - [ ] Uniform buffers and a 3d camera
 - [ ] Instancing

@@ -32,13 +32,20 @@ impl Vertex {
     }
 }
 
+#[rustfmt::skip]
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
-    Vertex {
-        position: [-0.5, -0.5, 0.0],
-        color: [0.0, 1.0, 0.0],
-    },
-    Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
+    Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [1.0, 0.0, 0.0] },
+    Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.5, 0.5, 0.0] },
+    Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.0, 1.0, 0.0] },
+    Vertex { position: [0.35966998, -0.3473291, 0.0], color: [0.0, 0.5, 0.5] },
+    Vertex { position: [0.44147372, 0.2347359, 0.0], color: [0.0, 0.0, 1.0] },
+];
+
+#[rustfmt::skip]
+const INDICES: &[u16] = &[
+    0, 1, 4,
+    1, 2, 4,
+    2, 3, 4,
 ];
 
 struct State {
@@ -53,10 +60,9 @@ struct State {
     size: PhysicalSize<u32>,
     clear_color: Color,
     render_pipeline: RenderPipeline,
-    challenge_render_pipeline: RenderPipeline,
     vertex_buffer: Buffer,
-    num_vertices: u32,
-    use_color: bool,
+    index_buffer: Buffer,
+    num_indices: u32,
 }
 
 impl State {
@@ -116,19 +122,19 @@ impl State {
         let shader = device.create_shader_module(include_wgsl!("shaders/shader.wgsl"));
         let render_pipeline = new_pipeline(&device, &render_pipeline_layout, shader, &config);
 
-        let shader = device.create_shader_module(include_wgsl!("shaders/challenge.wgsl"));
-        let challenge_render_pipeline =
-            new_pipeline(&device, &render_pipeline_layout, shader, &config);
-
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(VERTICES),
             usage: BufferUsages::VERTEX,
         });
 
-        let num_vertices = VERTICES.len() as u32;
+        let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: BufferUsages::INDEX,
+        });
 
-        let use_color = true;
+        let num_indices = INDICES.len() as u32;
 
         Self {
             instance,
@@ -140,10 +146,9 @@ impl State {
             clear_color,
             size,
             render_pipeline,
-            challenge_render_pipeline,
             vertex_buffer,
-            num_vertices,
-            use_color,
+            index_buffer,
+            num_indices,
         }
     }
 
@@ -161,13 +166,13 @@ impl State {
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
-                        state,
+                        state: _,
                         virtual_keycode: Some(VirtualKeyCode::Space),
                         ..
                     },
                 ..
             } => {
-                self.use_color = *state == ElementState::Released;
+                println!("Pressed space");
                 true
             }
 
@@ -208,14 +213,10 @@ impl State {
                 depth_stencil_attachment: None,
             });
 
-            render_pass.set_pipeline(if self.use_color {
-                &self.render_pipeline
-            } else {
-                &self.challenge_render_pipeline
-            });
-
+            render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.draw(0..self.num_vertices, 0..1);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
         }
 
         self.queue.submit(iter::once(encoder.finish()));
