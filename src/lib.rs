@@ -70,9 +70,18 @@ impl State {
         let size = window.inner_size();
 
         // The instance is a handle to our GPU
-        // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = Instance::new(Backends::all());
-        let surface = unsafe { instance.create_surface(window) };
+        // Backends::all => Vulkan + Metal + DX12 + Browser WebGPU
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::all(),
+            dx12_shader_compiler: Default::default(),
+        });
+
+        // # Safety
+        //
+        // The surface needs to live as long as the window that created it.
+        // State owns the window so this should be safe.
+        let surface = unsafe { instance.create_surface(&window) }.unwrap();
+
         let adapter = instance
             .request_adapter(&RequestAdapterOptions {
                 power_preference: PowerPreference::default(),
@@ -92,23 +101,38 @@ impl State {
                     limits: if cfg!(target_arch = "wasm32") {
                         Limits::downlevel_webgl2_defaults()
                     } else {
-                        Limits::default()
+                        let mut limits = Limits::default();
+                        limits.max_texture_dimension_3d = 1024;
+                        limits
                     },
                 },
-                // Some(&std::path::Path::new("trace")), // Trace path
-                None,
+                None, // Trace path
             )
             .await
             .unwrap();
 
+        let surface_caps = surface.get_capabilities(&adapter);
+        // Shader code in this tutorial assumes an Srgb surface texture. Using a different
+        // one will result all the colors comming out darker. If you want to support non
+        // Srgb surfaces, you'll need to account for that when drawing to the frame.
+        let surface_format = surface_caps
+            .formats
+            .iter()
+            .copied()
+            .filter(|f| f.describe().srgb)
+            .next()
+            .unwrap_or(surface_caps.formats[0]);
+
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
-            format: surface.get_supported_formats(&adapter)[0],
+            format: surface_format,
             width: size.width,
             height: size.height,
-            present_mode: PresentMode::Fifo,
-            alpha_mode: CompositeAlphaMode::Auto,
+            present_mode: surface_caps.present_modes[0],
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
         };
+
         surface.configure(&device, &config);
 
         let clear_color = Color::BLACK;
